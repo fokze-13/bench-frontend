@@ -6,10 +6,10 @@ export default function NotFoundScreen() {
     <>
       <Stack.Screen options={{ title: 'Oops! Not Found' }} />
       <View style={styles.container}>
-          <Text style={styles.not_found}>
-              404
-          </Text>
-          &nbsp;
+        <Text style={styles.not_found}>
+          404
+        </Text>
+        &nbsp;
         <Link href="/" style={styles.button}>
           Go back to Home screen!
         </Link>
@@ -32,8 +32,8 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-    not_found: {
-     fontSize: 50,
-     color: "#555"
-    }
+  not_found: {
+    fontSize: 50,
+    color: "#555"
+  }
 });
