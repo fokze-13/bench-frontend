@@ -1,19 +1,21 @@
-export type sendMessage = {
-    type: "receive_message";
-    payload: {
-        message: string;
-    };
-};
-
-export type receiveMessage = {
-    type: "send_message";
-    payload: {
+export type WsEvent =
+  | {
+      type: "send_message";
+      payload: {
         message: string;
         author_alias: string;
+      };
     }
-}
+  | {
+      type: "event";
+      payload: {
+        event_message: string;
+      };
+    }
 
-export type ServerMessage = {
-    type: string;
-    payload: object;
-}
+export type SendMessageCommand = {
+  type: "receive_message";
+  payload: {
+    message: string;
+  };
+};
