@@ -6,12 +6,24 @@ export function useAuth() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        getToken()
-            .then((saved) =>
-                saved ? setToken(saved) : fetchToken().then(setToken),
-            )
-            .catch(() => setError("Не удалось подключиться к серверу"));
-    }, []);
+    const init = async () => {
+        try {
+            const saved = await getToken();
+
+            if (saved) {
+                setToken(saved);
+                return;
+            }
+
+            const newToken = await fetchToken();
+            setToken(newToken);
+        } catch (e) {
+            setError(String(e));
+        }
+    };
+
+    init();
+}, []);
 
     return { token, error };
 }
