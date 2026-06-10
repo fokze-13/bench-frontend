@@ -1,5 +1,6 @@
 {
   "expo": {
+    "scheme": "myapp",
     "name": "MyApp",
     "slug": "MyApp",
     "version": "1.0.0",
