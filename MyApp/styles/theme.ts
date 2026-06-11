@@ -1,4 +1,15 @@
-export const colors = {
+export interface ThemeColors {
+  bg: string;
+  surface: string;
+  primary: string;
+  secondary: string;
+  accent: string;
+  accentSoft: string;
+  border: string;
+  danger: string;
+}
+
+export const darkColors: ThemeColors = {
   bg: "#0B1220",
   surface: "#111B2E",
   primary: "#FFFFFF",
@@ -9,7 +20,24 @@ export const colors = {
 
   border: "#1E2A44",
   danger: "#FF5A6A",
-} as const;
+};
+
+export const lightColors: ThemeColors = {
+  bg: "#F4F6F9",
+  surface: "#FFFFFF",
+  primary: "#1A202C",
+  secondary: "#718096",
+
+  accent: "#007AFF",
+  accentSoft: "#E1EFFF",
+
+  border: "#E2E8F0",
+  danger: "#FF3B30",
+};
+
+// Default colors for backward compatibility
+export const colors = darkColors;
+
 
 export const spacing = {
   xs: 4,
@@ -24,3 +52,4 @@ export const radius = {
   md: 12,
   lg: 20,
 } as const;
+
