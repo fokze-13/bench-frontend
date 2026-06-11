@@ -6,7 +6,7 @@ export const ENDPOINTS = {
     ws: (sessionId: string, token: string) => {
         const cleanHost = BASE_URL.replace(/^https?:\/\//, "");
         const protocol = BASE_URL.startsWith("https") ? "wss" : "ws";
-        return `${protocol}://${cleanHost}/session/connect/${sessionId}?token=${token}`;
+        return `${protocol}://${cleanHost}/session/connect?token=${token}&session_id=${sessionId}`;
     }
 };
 
