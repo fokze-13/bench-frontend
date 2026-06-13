@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createChatSocket } from "@/utils/websocket";
-import type { WsEvent, SendMessageCommand } from "@/types/websocket";
+import type { WsEvent, SendMessageEvent, UserTypingEvent } from "@/types/websocket";
 import { useSettings } from "@/hooks/useSettings";
 import { Vibration } from "react-native";
 
@@ -11,35 +11,18 @@ export type Message = {
   authorAlias: string;
 };
 
-function parsePeopleCountChange(msgText: string): number {
-  const text = msgText.toLowerCase();
-  
-  // Try to find explicit numbers first: e.g. "people: 3", "users online: 5", "4 users in room"
-  const numMatch = text.match(/(\d+)\s*(people|users|members|participants|пользователей|участников|человек)/);
-  if (numMatch) {
-    const val = parseInt(numMatch[1], 10);
-    if (!isNaN(val)) return val;
-  }
-  
-  if (text.includes("joined") || text.includes("entered") || text.includes("присоединился") || text.includes("подключился") || text.includes("вошел")) {
-    return 1;
-  }
-  if (text.includes("left") || text.includes("disconnected") || text.includes("вышел") || text.includes("отключился")) {
-    return -1;
-  }
-  return 0;
-}
-
 export function useChat(sessionId: string, token: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [connected, setConnected] = useState(false);
   const [peopleCount, setPeopleCount] = useState(1);
-  const { settings } = useSettings();
-
-  const wsRef = useRef<WebSocket | null>(null);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
   
-  // Maintain a reference to settings so we don't recreate the socket connection when options toggle
+  const { settings } = useSettings();
+  const wsRef = useRef<WebSocket | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const settingsRef = useRef(settings);
+
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
@@ -49,8 +32,8 @@ export function useChat(sessionId: string, token: string) {
       sessionId,
       token,
       (event: WsEvent) => {
-        switch (event.type) {
-          case "send_message":
+        switch (event.event_type) {
+          case "receive_message":
             if (settingsRef.current.vibrateOnMessage) {
               Vibration.vibrate(100);
             }
@@ -60,33 +43,58 @@ export function useChat(sessionId: string, token: string) {
                 type: "message",
                 text: event.payload.message,
                 mine: false,
-                authorAlias: event.payload.author_alias,
+                authorAlias: event.payload.alias,
               },
             ]);
             break;
 
-          case "event": {
-            const eventMsg = event.payload.event_message;
+          case "user_status": {
+            const { alias, active_connections, status } = event.payload;
+            setPeopleCount(active_connections);
+
+            const actionText = status === "joined" ? "присоединился к чату" : "покинул чат";
+
             setMessages((prev) => [
               ...prev,
               {
                 type: "event",
-                text: eventMsg,
+                text: `Пользователь ${alias} ${actionText}`,
                 mine: false,
                 authorAlias: "",
               },
             ]);
+            break;
+          }
 
-            const change = parsePeopleCountChange(eventMsg);
-            if (change > 5) {
-              setPeopleCount(change);
-            } else if (change === 1 || change === -1) {
-              setPeopleCount((prev) => Math.max(1, prev + change));
-            } else if (change > 0) {
-              setPeopleCount(change);
+          case "server_typing": {
+            const { alias, typing } = event.payload;
+            if (typing === "start") {
+              setTypingUsers((prev) => {
+                if (prev.includes(alias)) return prev;
+                return [...prev, alias];
+              });
+            } else if (typing === "stop") {
+              setTypingUsers((prev) => prev.filter((a) => a !== alias));
             }
             break;
           }
+
+          case "error":
+            setMessages((prev) => [
+              ...prev,
+              {
+                type: "event",
+                text: `Ошибка: ${event.payload.error_message}`,
+                mine: false,
+                authorAlias: "",
+              },
+            ]);
+            break;
+
+          case "send_message":
+          case "user_typing":
+            // Outgoing events, ignored if received
+            break;
 
           default:
             const exhaustiveCheck: never = event;
@@ -102,22 +110,69 @@ export function useChat(sessionId: string, token: string) {
 
     return () => {
       ws.close();
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
   }, [sessionId, token]);
+
+  const onTyping = () => {
+    if (!connected || !wsRef.current) return;
+
+    if (!isTyping) {
+      setIsTyping(true);
+      const typingEvent: UserTypingEvent = {
+        event_type: "user_typing",
+        payload: { typing: "start" },
+      };
+      wsRef.current.send(JSON.stringify(typingEvent));
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const idleEvent: UserTypingEvent = {
+          event_type: "user_typing",
+          payload: { typing: "stop" },
+        };
+        wsRef.current.send(JSON.stringify(idleEvent));
+      }
+      setIsTyping(false);
+    }, 2000);
+  };
 
   function send(text: string) {
     if (!wsRef.current) {
       return;
     }
 
-    const message: SendMessageCommand = {
-      type: "receive_message",
+    const message: SendMessageEvent = {
+      event_type: "send_message",
       payload: {
         message: text,
       },
     };
 
     wsRef.current.send(JSON.stringify(message));
+
+    // Clear typing state immediately when message is sent
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    if (isTyping) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        const idleEvent: UserTypingEvent = {
+          event_type: "user_typing",
+          payload: { typing: "stop" },
+        };
+        wsRef.current.send(JSON.stringify(idleEvent));
+      }
+      setIsTyping(false);
+    }
 
     setMessages((prev) => [
       ...prev,
@@ -134,7 +189,8 @@ export function useChat(sessionId: string, token: string) {
     messages,
     connected,
     peopleCount,
+    typingUsers,
     send,
+    onTyping,
   };
 }
-
