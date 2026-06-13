@@ -34,7 +34,7 @@ export default function ChatScreen() {
   const { settings, colors, isDark } = useSettings();
   
   // Custom hook usage
-  const { messages, connected, peopleCount, send } = useChat(sessionId || "", token || "");
+  const { messages, connected, peopleCount, typingUsers, send, onTyping } = useChat(sessionId || "", token || "");
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
 
@@ -144,6 +144,15 @@ export default function ChatScreen() {
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
 
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <View style={[styles.typingContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <Text style={[styles.typingText, { color: colors.secondary }]}>
+              💬 {typingUsers.join(", ")} {typingUsers.length === 1 ? "печатает..." : "печатают..."}
+            </Text>
+          </View>
+        )}
+
         {/* Footer / Input */}
         <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
           <TextInput
@@ -158,7 +167,10 @@ export default function ChatScreen() {
             placeholder="Напишите сообщение..."
             placeholderTextColor={colors.secondary}
             value={inputText}
-            onChangeText={setInputText}
+            onChangeText={(text) => {
+              setInputText(text);
+              onTyping();
+            }}
             multiline={false}
             onSubmitEditing={settings.sendOnEnter ? handleSend : undefined}
             blurOnSubmit={false}
@@ -311,5 +323,17 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "600",
+  },
+  typingContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderTopWidth: 0.5,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  typingText: {
+    fontSize: 13,
+    fontStyle: "italic",
+    fontWeight: "500",
   },
 });
